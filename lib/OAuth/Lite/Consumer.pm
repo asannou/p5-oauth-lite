@@ -421,7 +421,8 @@ sub get_request_token {
     my $res = $self->__request(
         realm  => $realm,
         url    => $request_token_url,
-        params => {%args, oauth_callback => $callback},
+        callback => $callback,
+        params => {%args},
     );
     unless ($res->is_success) {
         return $self->error($res->status_line);
@@ -521,6 +522,7 @@ sub gen_oauth_request {
     my $url     = $args{url};
     my $content = $args{content};
     my $token   = $args{token};
+    my $callback = $args{callback};
     my $extra   = $args{params} || {};
     my $realm   = $args{realm}
                 || $self->{realm}
@@ -557,11 +559,11 @@ sub gen_oauth_request {
                     $extra->{oauth_body_hash} = $hash;
                 }
             }
-            my $query = $self->gen_auth_query($method, $url, $token, $extra);
+            my $query = $self->gen_auth_query($method, $url, $token, $callback, $extra);
             $url = sprintf q{%s?%s}, $url, $query;
         }
     } elsif ($auth_method eq POST_BODY) {
-        my $query = $self->gen_auth_query($method, $url, $token, $extra);
+        my $query = $self->gen_auth_query($method, $url, $token, $callback, $extra);
         $content = $query;
         $headers->header('Content-Type', q{application/x-www-form-urlencoded});
     } else {
@@ -579,7 +581,7 @@ sub gen_oauth_request {
                 $extra->{oauth_body_hash} = $hash;
             }
         }
-        my $header = $self->gen_auth_header($method, $origin_url,
+        my $header = $self->gen_auth_header($method, $origin_url, $callback,
             { realm => $realm, token => $token, extra => $extra });
         $headers->header( Authorization => $header );
     }
@@ -804,8 +806,9 @@ OAuth::Lite::Token object(optional)
 =cut
 
 sub gen_auth_header {
-    my ($self, $method, $url, $args) = @_;
+    my ($self, $method, $url, $callback, $args) = @_;
     my $extra = $args->{extra} || {};
+    $extra->{oauth_callback} = $callback if $callback;
     my $params = $self->gen_auth_params($method, $url, $args->{token}, $extra);
     my $realm = $args->{realm} || '';
     my $authorization_header = build_auth_header($realm, {%$params, %$extra});
@@ -817,8 +820,9 @@ sub gen_auth_header {
 =cut
 
 sub gen_auth_query {
-    my ($self, $method, $url, $token, $extra) = @_;
+    my ($self, $method, $url, $token, $callback, $extra) = @_;
     $extra ||= {};
+    $extra->{oauth_callback} = $callback if $callback;
     my $params = $self->gen_auth_params($method, $url, $token, $extra);
     my %all = (%$extra, %$params);
     normalize_params({%all});
